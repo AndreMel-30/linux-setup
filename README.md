@@ -14,10 +14,12 @@ The scripts are the same for everyone. Your own data lives in a **profile**, a f
 
 ## How to use it
 
+First fork this repo on GitHub (or copy it into a private repo), so you have your own copy to push your profile to. In the commands below, replace `AndreMel-30` with your GitHub username.
+
 On the system you have now, before reinstalling:
 
 ```bash
-git clone https://github.com/<user>/linux-setup.git
+git clone https://github.com/AndreMel-30/linux-setup.git
 cd linux-setup
 ./backup.sh myname        # saves everything into profiles/myname
 git diff                  # check it, especially the dotfiles
@@ -28,7 +30,7 @@ On the fresh install:
 
 ```bash
 sudo apt install -y git
-git clone https://github.com/<user>/linux-setup.git ~/linux-setup
+git clone https://github.com/AndreMel-30/linux-setup.git ~/linux-setup
 cd ~/linux-setup && ./install.sh myname
 ```
 
