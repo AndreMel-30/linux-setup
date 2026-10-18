@@ -1,0 +1,1 @@
+# Snap names, one per line. Add --classic if the app needs it (for example code --classic)

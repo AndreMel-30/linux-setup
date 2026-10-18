@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Example hook: add a PPA before the apt packages are installed.
+# Rename it to pre-ppa.sh to turn it on.
+set -euo pipefail
+sudo add-apt-repository -y ppa:name/ppa

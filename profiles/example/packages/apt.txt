@@ -1,0 +1,4 @@
+# apt packages, one per line. backup.sh fills this in, you can also edit it by hand.
+git
+curl
+btop

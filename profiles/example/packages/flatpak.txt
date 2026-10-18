@@ -1,0 +1,1 @@
+# Flathub app IDs, one per line (for example org.videolan.VLC)

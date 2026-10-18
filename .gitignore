@@ -1,0 +1,9 @@
+*.bak.*
+.env
+*.key
+
+# Personal and test files that stay out of the public repo
+CLAUDE.md
+profiles/andre/
+profiles/default/
+profiles/test/

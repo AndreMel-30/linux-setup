@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Example hook. Rename it to post-tailscale.sh to turn it on.
+#
+# Hooks cover things that are not plain packages:
+#   pre-*.sh   run BEFORE the packages (for example to add a repository or PPA)
+#   post-*.sh  run at the END
+# Scripts run in name order. $PROFILE_DIR points to the profile folder.
+set -euo pipefail
+command -v tailscale >/dev/null && { echo "   tailscale is already installed"; exit 0; }
+curl -fsSL https://tailscale.com/install.sh | sh
