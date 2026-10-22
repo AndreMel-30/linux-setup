@@ -34,7 +34,7 @@ git clone https://github.com/AndreMel-30/linux-setup.git ~/linux-setup
 cd ~/linux-setup && ./install.sh myname
 ```
 
-Then reboot. At the end, `install.sh` lists anything it could not do (and exits with an error code if there is something). You can run it again as many times as you like.
+Before changing anything, `install.sh` shows a summary of what it is going to do (repositories, packages, settings, which files in your home will be replaced) and asks you to confirm. When it is done, reboot. At the end, `install.sh` lists anything it could not do (and exits with an error code if there is something). You can run it again as many times as you like.
 
 If you leave out the name, the profile is called `default`. `example` is the template, so you can't back up into it.
 
@@ -83,6 +83,38 @@ It reads your system and writes the result into the profile. It does not change 
 ### install.sh
 
 It reads the profile and applies it to the new system. Run it as a normal user, not with `sudo`; it asks for your password once.
+
+First it prints a plan, for example:
+
+```
+==> Plan
+
+   Packages
+     apt repositories   5 to add: brave-browser-release, claude-desktop, docker, tailscale, vscodium
+     System upgrade     yes (apt full-upgrade)
+     apt packages       96 to install
+     Flatpak apps       2 to install: com.rustdesk.RustDesk, org.localsend.localsend_app
+     Snap apps          skipped (DO_SNAP=false)
+
+   System
+     Swappiness         10
+     TRIM               weekly timer on
+
+   Desktop and home folder
+     Desktop settings   4 dconf branches: /org/cinnamon/, /org/gnome/terminal/, /org/nemo/, /org/x/
+     Dotfiles           3 to link, 0 already linked
+                        2 existing file(s) in your home will be renamed to .bak.<date>
+
+   Your own scripts
+     Hooks              none
+
+Nothing has been changed yet. If you continue, you will be asked for your password.
+Continue? [y/N]
+```
+
+Nothing happens until you answer `y`. To skip the question (for example when another script runs it), use `./install.sh --yes myname`. Without a terminal and without `--yes`, it stops instead of guessing.
+
+Then:
 
 1. Runs `hooks/pre-*.sh`
 2. Puts back the third-party repositories and their keys from `apt-repos/`

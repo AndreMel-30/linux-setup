@@ -3,22 +3,142 @@
 #
 # Run this on the freshly installed system, from the graphical session,
 # as a normal user (it asks for sudo when needed). Safe to run more than once.
-#   ./install.sh [profile]    (no argument = "default", read from profiles/default)
+#   ./install.sh [--yes] [profile]    (no profile = "default", read from profiles/default)
 #
 # It reads the profile and applies it: packages, system tweaks, desktop
-# settings and dotfiles. Steps that fail are collected and listed at the end.
+# settings and dotfiles. Before changing anything it shows what it is going
+# to do and asks to continue (--yes skips the question).
+# Steps that fail are collected and listed at the end.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 . "$ROOT/lib/common.sh"
 
 [[ $EUID -eq 0 ]] && die "do not run this with sudo, run it as your normal user"
 
-resolve_profile "${1:-}"
+ASSUME_YES=false PROFILE_ARG=""
+for arg in "$@"; do
+    case $arg in
+        -y|--yes) ASSUME_YES=true ;;
+        -*)       die "unknown option: $arg (usage: ./install.sh [--yes] [profile])" ;;
+        *)        [[ -z $PROFILE_ARG ]] || die "give only one profile"; PROFILE_ARG=$arg ;;
+    esac
+done
+
+resolve_profile "$PROFILE_ARG"
 step "Profile: $PROFILE_DIR"
 [[ -d $PROFILE_DIR ]] || die "profile not found (create it with ./backup.sh on the old system)"
 check_distro
 load_config
 FAILED=()
+
+# --- Plan ---------------------------------------------------------------------
+# Show what is going to happen, before asking for sudo or changing anything.
+# It only reads the profile and the home folder, and follows the same rules
+# as the steps below.
+
+group() { printf '\n   \033[1m%s\033[0m\n' "$*"; }
+row()  { printf '     %-18s %s\n' "$1" "$2"; }
+off()  { row "$1" "skipped ($2=false)"; }
+join() { local IFS=,; echo "${*}" | sed 's/,/, /g'; }   # a b c -> "a, b, c"
+count_list() { read_list "$1" | wc -l; }
+
+step "Plan"
+
+group "Packages"
+if ! is_true "$DO_APT"; then
+    off "apt repositories" DO_APT
+elif [[ -d $PROFILE_DIR/apt-repos/sources ]]; then
+    names=()
+    for f in "$PROFILE_DIR"/apt-repos/sources/*; do n=$(basename "$f"); names+=("${n%.*}"); done
+    row "apt repositories" "${#names[@]} to add: $(join "${names[@]}")"
+    saved=$(cat "$PROFILE_DIR/apt-repos/codename" 2>/dev/null || true)
+    current=$(. /etc/os-release; echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")
+    if [[ -n $saved && $saved != "$current" ]]; then
+        row "" "! saved for '$saved', this system is '$current': some may not work"
+    fi
+else
+    row "apt repositories" "none"
+fi
+
+if is_true "$DO_UPGRADE"; then row "System upgrade" "yes (apt full-upgrade)"; else off "System upgrade" DO_UPGRADE; fi
+
+if is_true "$DO_APT"; then
+    row "apt packages" "$(count_list "$PROFILE_DIR/packages/apt.txt") to install"
+else
+    off "apt packages" DO_APT
+fi
+
+if is_true "$DO_FLATPAK"; then
+    mapfile -t list < <(read_list "$PROFILE_DIR/packages/flatpak.txt")
+    if ((${#list[@]})); then row "Flatpak apps" "${#list[@]} to install: $(join "${list[@]}")"; else row "Flatpak apps" "none"; fi
+else
+    off "Flatpak apps" DO_FLATPAK
+fi
+
+if is_true "$DO_SNAP"; then
+    n=$(count_list "$PROFILE_DIR/packages/snap.txt")
+    if ((n)) && ! command -v snap >/dev/null; then
+        row "Snap apps" "$n, but snap is not installed: they will be skipped"
+    elif ((n)); then
+        row "Snap apps" "$n to install"
+    else
+        row "Snap apps" "none"
+    fi
+else
+    off "Snap apps" DO_SNAP
+fi
+
+group "System"
+row "Swappiness" "${SWAPPINESS:-unchanged}"
+if is_true "$ENABLE_TRIM"; then row "TRIM" "weekly timer on"; else row "TRIM" "unchanged"; fi
+
+group "Desktop and home folder"
+if ! is_true "$DO_DCONF"; then
+    off "Desktop settings" DO_DCONF
+elif ! command -v dconf >/dev/null; then
+    row "Desktop settings" "skipped (dconf is not installed)"
+else
+    list=()
+    for ini in "$PROFILE_DIR"/dconf/*.ini; do if [[ -s $ini ]]; then list+=("$(dconf_path_for "$ini")"); fi; done
+    if ((${#list[@]})); then row "Desktop settings" "${#list[@]} dconf branches: $(join "${list[@]}")"; else row "Desktop settings" "none"; fi
+fi
+
+if ! is_true "$DO_DOTFILES"; then
+    off "Dotfiles" DO_DOTFILES
+else
+    new=0 bak=0 linked=0
+    while IFS= read -r -d '' src; do
+        rel=${src#"$PROFILE_DIR/dotfiles/"}
+        [[ $(basename "$rel") == .gitkeep ]] && continue
+        dst="$HOME/$rel"
+        if [[ $(readlink -f "$dst" 2>/dev/null) == "$src" ]]; then linked=$((linked + 1))
+        elif [[ -e $dst || -L $dst ]]; then bak=$((bak + 1))
+        else new=$((new + 1)); fi
+    done < <(find "$PROFILE_DIR/dotfiles" -type f -print0 2>/dev/null)
+    if ((new + bak + linked == 0)); then
+        row "Dotfiles" "none"
+    else
+        row "Dotfiles" "$((new + bak)) to link, $linked already linked"
+        if ((bak)); then row "" "$bak existing file(s) in your home will be renamed to .bak.<date>"; fi
+    fi
+fi
+
+group "Your own scripts"
+if is_true "$DO_HOOKS"; then
+    list=()
+    for h in "$PROFILE_DIR"/hooks/pre-*.sh "$PROFILE_DIR"/hooks/post-*.sh; do if [[ -f $h ]]; then list+=("$(basename "$h")"); fi; done
+    if ((${#list[@]})); then row "Hooks" "${#list[@]} to run: $(join "${list[@]}")"; else row "Hooks" "none"; fi
+else
+    off "Hooks" DO_HOOKS
+fi
+
+echo
+if ! is_true "$ASSUME_YES"; then
+    [[ -t 0 ]] || die "can't ask for confirmation here: run it with --yes to skip the question"
+    echo "Nothing has been changed yet. If you continue, you will be asked for your password."
+    read -r -p "Continue? [y/N] " answer
+    [[ ${answer,,} =~ ^(y|yes)$ ]] || { echo "Stopped, nothing was changed."; exit 1; }
+fi
 
 # Ask for the sudo password once, then keep it alive in the background
 # so it does not expire during long installs.
