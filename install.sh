@@ -8,7 +8,7 @@
 # It reads the profile and applies it: packages, system tweaks, desktop
 # settings and dotfiles. Steps that fail are collected and listed at the end.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 . "$ROOT/lib/common.sh"
 
 [[ $EUID -eq 0 ]] && die "do not run this with sudo, run it as your normal user"
@@ -26,6 +26,13 @@ sudo -v
 while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done 2>/dev/null &
 SUDO_KEEPALIVE=$!
 trap 'kill "$SUDO_KEEPALIVE" 2>/dev/null || true' EXIT
+
+# apt without questions: packages that ask something while installing (wireshark,
+# for example) get their default answer, and config files you changed are kept.
+apt_get() {
+    sudo DEBIAN_FRONTEND=noninteractive apt-get -y \
+        -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@"
+}
 
 # Run the profile's hooks/pre-*.sh or hooks/post-*.sh scripts, in name order.
 run_hooks() {   # $1 = pre | post
@@ -65,8 +72,8 @@ fi
 step "System update"
 # A repository with a bad or expired key makes "apt-get update" fail, but the
 # others are still updated, so this is reported instead of stopping here.
-sudo apt-get update || FAILED+=("apt-get update: a repository failed, see the messages above")
-sudo apt-get full-upgrade -y
+apt_get update || FAILED+=("apt-get update: a repository failed, see the messages above")
+apt_get full-upgrade
 
 if is_true "$DO_APT"; then
     step "apt packages"
@@ -78,9 +85,9 @@ if is_true "$DO_APT"; then
         if apt-cache show "$p" >/dev/null 2>&1; then PKGS+=("$p"); else FAILED+=("apt: $p (not found)"); fi
     done
     if ((${#PKGS[@]})); then
-        sudo apt-get install -y "${PKGS[@]}" || {
+        apt_get install "${PKGS[@]}" || {
             warn "bulk install failed, trying one package at a time..."
-            for p in "${PKGS[@]}"; do sudo apt-get install -y "$p" || FAILED+=("apt: $p"); done
+            for p in "${PKGS[@]}"; do apt_get install "$p" || FAILED+=("apt: $p"); done
         }
     fi
 fi
@@ -89,8 +96,10 @@ if is_true "$DO_FLATPAK"; then
     mapfile -t APPS < <(read_list "$PROFILE_DIR/packages/flatpak.txt")
     if ((${#APPS[@]})); then
         step "Flatpak apps"
-        command -v flatpak >/dev/null || sudo apt-get install -y flatpak
-        if sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo; then
+        command -v flatpak >/dev/null || apt_get install flatpak || true
+        if ! command -v flatpak >/dev/null; then
+            FAILED+=("flatpak: could not install flatpak, ${#APPS[@]} apps not installed")
+        elif sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo; then
             for a in "${APPS[@]}"; do
                 sudo flatpak install -y --noninteractive flathub "$a" || FAILED+=("flatpak: $a")
             done

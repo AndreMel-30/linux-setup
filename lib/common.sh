@@ -48,6 +48,8 @@ resolve_profile() {
     local arg=${1:-default}
     if [[ $arg == */* ]]; then
         PROFILE_DIR=$(realpath -m "$arg")
+    elif [[ $arg == .* ]]; then
+        die "'$arg' is not a valid profile name"
     else
         PROFILE_DIR="$ROOT/profiles/$arg"
     fi

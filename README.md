@@ -36,7 +36,7 @@ cd ~/linux-setup && ./install.sh myname
 
 Then reboot. At the end, `install.sh` lists anything it could not do. You can run it again as many times as you like.
 
-If you leave out the name, the profile is called `default`.
+If you leave out the name, the profile is called `default`. `example` is the template, so you can't back up into it.
 
 ## Profiles
 
@@ -77,7 +77,7 @@ It reads your system and writes the result into the profile. It does not change 
 - **third-party repositories**: copies the repository files from `/etc/apt/sources.list.d/` and the keys they are signed with into `apt-repos/`. The distro's own repositories are skipped.
 - **Flatpak and Snap**: lists the apps you have installed.
 - **dconf**: dumps the desktop settings to text files.
-- **dotfiles**: copies the files listed in `DOTFILES`, and warns you if one looks like it contains a token or password.
+- **dotfiles**: copies the files listed in `DOTFILES`, and warns you if one looks like it contains a token or password. If one is a symlink, the file it points to is copied. A file you delete from your home folder is not deleted from the profile; remove it there by hand.
 
 ### install.sh
 
@@ -86,7 +86,7 @@ It reads the profile and applies it to the new system. Run it as a normal user, 
 1. Runs `hooks/pre-*.sh`
 2. Puts back the third-party repositories and their keys from `apt-repos/`
 3. Updates the system
-4. Installs the apt, Flatpak and Snap packages. A package that can't be found is skipped and reported, it doesn't stop the rest.
+4. Installs the apt, Flatpak and Snap packages. A package that can't be found is skipped and reported, it doesn't stop the rest. Packages that ask a question while installing (wireshark, for example) get their default answer, so the script never stops to wait for you.
 5. Sets swappiness and TRIM
 6. Loads the dconf settings
 7. Links the dotfiles into your home folder. They are symlinks, so editing `~/.bashrc` edits the file in the repo. If a file is already there, it is renamed to `.bak.<date>`, never deleted. Because of the links, keep the repo in a fixed place (like `~/linux-setup`): if you move or delete it, those files stop working.

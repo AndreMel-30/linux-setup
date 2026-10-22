@@ -9,10 +9,11 @@
 # It only reads from the system; the only things it writes are inside the profile.
 # What to save is controlled by profiles/<profile>/setup.conf.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 . "$ROOT/lib/common.sh"
 
 resolve_profile "${1:-}"
+[[ $PROFILE_DIR == "$ROOT/profiles/example" ]] && die "profiles/example is the template for new profiles, pick another name"
 step "Profile: $PROFILE_DIR"
 check_distro
 
@@ -113,16 +114,19 @@ fi
 
 if is_true "$DO_DOTFILES"; then
     step "Dotfiles"
+    profile_real=$(realpath -m "$PROFILE_DIR")
     for f in "${DOTFILES[@]}"; do
         [[ -e $HOME/$f ]] || continue
-        # Each entry can be a file or a folder. find -type f only returns real files,
-        # so anything that is already a symlink into the repo is skipped.
+        # Each entry can be a file or a folder. Symlinks are followed (and the file
+        # they point to is copied), except the ones install.sh made into this
+        # profile: those files are already here.
         while IFS= read -r -d '' src; do
             rel=${src#"$HOME"/}
+            [[ $(readlink -f "$src") == "$profile_real"/* ]] && continue
             mkdir -p "$(dirname "$PROFILE_DIR/dotfiles/$rel")"
             cp "$src" "$PROFILE_DIR/dotfiles/$rel"
             info "~/$rel"
-        done < <(find "$HOME/$f" -type f -print0)
+        done < <(find -L "$HOME/$f" -type f -print0)
     done
     if grep -rIlE '(token|secret|passw(or)?d|api[_-]?key)[[:space:]]*[=:]' "$PROFILE_DIR/dotfiles" 2>/dev/null; then
         warn "the files above look like they contain credentials: check them before you push"
