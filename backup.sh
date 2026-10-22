@@ -38,6 +38,9 @@ if is_true "$DO_APT"; then
         warn "$initial not found, saving all manual packages (review the list)"
         apt-mark showmanual | sort -u > "$out"
     fi
+    # Kernel packages tied to one version (linux-image-6.8.0-106-generic...) pile up
+    # with updates. The new system brings its own kernel, so they are left out.
+    sed -i -E '/^linux-(image|headers|modules|modules-extra|tools|cloud-tools)-[0-9]/d' "$out"
     info "$(wc -l < "$out") packages -> packages/apt.txt"
 
     # Only a reminder: third-party repositories are not restored automatically.
