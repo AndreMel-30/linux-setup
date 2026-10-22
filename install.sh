@@ -41,8 +41,31 @@ run_hooks() {   # $1 = pre | post
 
 run_hooks pre
 
+# Put back the third-party repositories saved by backup.sh, with their keys.
+# apt then checks every package from them against those keys, as usual.
+REPOS="$PROFILE_DIR/apt-repos"
+if is_true "$DO_APT" && [[ -d $REPOS/sources ]]; then
+    step "Third-party apt repositories"
+    saved=$(cat "$REPOS/codename" 2>/dev/null || true)
+    current=$(. /etc/os-release; echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")
+    if [[ -n $saved && $saved != "$current" ]]; then
+        warn "these repositories were set up for '$saved', this system is '$current': some may not work"
+    fi
+    if [[ -d $REPOS/keys ]]; then
+        while IFS= read -r -d '' key; do
+            sudo install -D -m 0644 "$key" "${key#"$REPOS/keys"}"
+        done < <(find "$REPOS/keys" -type f -print0)
+    fi
+    for src in "$REPOS"/sources/*; do
+        sudo install -m 0644 "$src" /etc/apt/sources.list.d/
+        info "$(basename "$src")"
+    done
+fi
+
 step "System update"
-sudo apt-get update
+# A repository with a bad or expired key makes "apt-get update" fail, but the
+# others are still updated, so this is reported instead of stopping here.
+sudo apt-get update || FAILED+=("apt-get update: a repository failed, see the messages above")
 sudo apt-get full-upgrade -y
 
 if is_true "$DO_APT"; then

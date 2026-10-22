@@ -4,7 +4,7 @@ A pair of bash scripts to save how your Linux is set up and put it back after a 
 
 It handles:
 
-- apt, Flatpak and Snap packages
+- apt, Flatpak and Snap packages, including third-party apt repositories like Brave or Docker
 - desktop settings (through dconf)
 - dotfiles like `.bashrc` and `.gitconfig`
 - a few system tweaks (swappiness, TRIM)
@@ -46,6 +46,7 @@ A profile is just a folder. Its name is whatever you type after the script name;
 profiles/myname/
 ├── setup.conf      what to do (see below)
 ├── packages/       apt.txt, flatpak.txt, snap.txt, one entry per line
+├── apt-repos/      third-party apt repositories and their keys
 ├── dconf/          desktop settings, one .ini file per dconf branch
 ├── dotfiles/       copies of your config files
 └── hooks/          your own scripts
@@ -72,7 +73,8 @@ This is where you decide what the scripts do. It is a normal bash file with a fe
 
 It reads your system and writes the result into the profile. It does not change anything on the system itself.
 
-- **apt**: lists the packages you installed by hand. It subtracts the list from the moment the system was installed, so you only get your own packages and not the hundreds that came with the distro.
+- **apt**: lists the packages you installed by hand. It subtracts the list from the moment the system was installed, so you only get your own packages and not the hundreds that came with the distro. Old kernel versions are left out.
+- **third-party repositories**: copies the repository files from `/etc/apt/sources.list.d/` and the keys they are signed with into `apt-repos/`. The distro's own repositories are skipped.
 - **Flatpak and Snap**: lists the apps you have installed.
 - **dconf**: dumps the desktop settings to text files.
 - **dotfiles**: copies the files listed in `DOTFILES`, and warns you if one looks like it contains a token or password.
@@ -82,12 +84,13 @@ It reads your system and writes the result into the profile. It does not change 
 It reads the profile and applies it to the new system. Run it as a normal user, not with `sudo`; it asks for your password once.
 
 1. Runs `hooks/pre-*.sh`
-2. Updates the system
-3. Installs the apt, Flatpak and Snap packages. A package that can't be found is skipped and reported, it doesn't stop the rest.
-4. Sets swappiness and TRIM
-5. Loads the dconf settings
-6. Links the dotfiles into your home folder. They are symlinks, so editing `~/.bashrc` edits the file in the repo. If a file is already there, it is renamed to `.bak.<date>`, never deleted. Because of the links, keep the repo in a fixed place (like `~/linux-setup`): if you move or delete it, those files stop working.
-7. Runs `hooks/post-*.sh`
+2. Puts back the third-party repositories and their keys from `apt-repos/`
+3. Updates the system
+4. Installs the apt, Flatpak and Snap packages. A package that can't be found is skipped and reported, it doesn't stop the rest.
+5. Sets swappiness and TRIM
+6. Loads the dconf settings
+7. Links the dotfiles into your home folder. They are symlinks, so editing `~/.bashrc` edits the file in the repo. If a file is already there, it is renamed to `.bak.<date>`, never deleted. Because of the links, keep the repo in a fixed place (like `~/linux-setup`): if you move or delete it, those files stop working.
+8. Runs `hooks/post-*.sh`
 
 ### lib/
 
@@ -97,7 +100,18 @@ It reads the profile and applies it to the new system. Run it as a normal user, 
 
 For things that aren't a normal package: a `pre-*.sh` script runs before the packages (good for adding a PPA or repository), a `post-*.sh` script runs at the end (good for tools with their own installer, like Tailscale). There are two examples in `profiles/example/hooks/`.
 
-`backup.sh` also writes `packages/apt-sources.txt`, a list of the third-party repositories you use now. It is only a reminder; it is not restored automatically.
+You usually don't need a hook for apt repositories: `backup.sh` already saves the ones you have.
+
+## Third-party repositories
+
+Packages like `brave-browser` or `docker-ce` don't come from your distro but from the developer's own apt repository. `backup.sh` saves those repositories, together with the key each one is signed with, and `install.sh` puts them back before installing packages. apt then checks every package against those keys, as it does on your current system.
+
+Nothing is searched for or downloaded: the new system trusts exactly the same sources as the old one. A few things to keep in mind:
+
+- If you don't want a repository anymore, remove it from your current system (or delete its files from `apt-repos/`) before you run `install.sh`.
+- Developers sometimes change their key. If a saved key is out of date, `apt-get update` complains about that repository; `install.sh` reports it at the end and goes on with the rest. Re-add the repository by following the developer's instructions.
+- The repositories are set up for one Ubuntu release (`apt-repos/codename`, for example `noble`). If the new system is based on a different release, `install.sh` warns you, because some of them may not work.
+- Anyone who can change your profile can add a repository and a key, and so install software as root. The same is true for hooks. Keep your profile somewhere only you can write to.
 
 ## Good to know
 

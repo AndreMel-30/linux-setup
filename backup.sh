@@ -43,16 +43,43 @@ if is_true "$DO_APT"; then
     sed -i -E '/^linux-(image|headers|modules|modules-extra|tools|cloud-tools)-[0-9]/d' "$out"
     info "$(wc -l < "$out") packages -> packages/apt.txt"
 
-    # Only a reminder: third-party repositories are not restored automatically.
-    # Re-add them with a pre-*.sh hook.
-    # Mint keeps its official mirrors (which may be local ones) in
-    # official-package-repositories.list, so that file is skipped.
-    find /etc/apt/sources.list.d -type f ! -name official-package-repositories.list \
-            -exec grep -hE '^(deb |URIs:)' {} + 2>/dev/null \
-        | grep -v -e 'linuxmint.com' -e 'ubuntu.com' | sort -u \
-        > "$PROFILE_DIR/packages/apt-sources.txt" || true
-    if [[ -s $PROFILE_DIR/packages/apt-sources.txt ]]; then
-        info "third-party repositories -> packages/apt-sources.txt (recreate them with a hook)"
+    # Third-party repositories (Brave, Docker, PPAs...): save each source file
+    # and the key it is signed with, so install.sh can put them back as they are.
+    # These are the keys this system already trusts; nothing is downloaded.
+    step "Third-party apt repositories"
+    repos="$PROFILE_DIR/apt-repos"
+    rm -rf "$repos" "$PROFILE_DIR/packages/apt-sources.txt"
+    for src in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+        [[ -f $src ]] || continue
+        name=$(basename "$src")
+        # The distro's own repositories (Mint keeps its mirrors, which may be local
+        # ones, in official-*.list) are already on the new system.
+        [[ $name == official-*.list || $name == ubuntu.sources ]] && continue
+        urls=$(grep -hE '^(deb |URIs:)' "$src" || true)
+        [[ -n $urls ]] && grep -qvE 'ubuntu\.com|linuxmint\.com' <<< "$urls" || continue
+        mkdir -p "$repos/sources"
+        cp "$src" "$repos/sources/"
+        # Key files named in "signed-by=..." (.list) or "Signed-By: ..." (.sources).
+        # A .sources file can also hold the key itself, then there is nothing to copy.
+        keys=$(sed -nE 's/.*signed-by=([^] ]+).*/\1/p; s/^Signed-By:[[:space:]]*(\/.+)/\1/p' "$src" | tr ',' '\n' | sort -u)
+        if ! grep -qi 'signed-by' "$src"; then
+            warn "$name has no signed-by key: re-add its key by hand or with a hook"
+        fi
+        for key in $keys; do
+            if [[ -r $key ]]; then
+                mkdir -p "$repos/keys$(dirname "$key")"
+                cp "$key" "$repos/keys$key"
+            else
+                warn "$name: key $key not readable, not saved"
+            fi
+        done
+        info "$name"
+    done
+    if [[ -d $repos ]]; then
+        # The Ubuntu release the repositories were set up for (Mint 22 -> noble).
+        (. /etc/os-release; echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}") > "$repos/codename"
+    else
+        info "none found"
     fi
 fi
 
