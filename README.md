@@ -10,6 +10,8 @@ It handles:
 - a few system tweaks (swappiness, TRIM)
 - anything else you want, through your own scripts ("hooks")
 
+![What install.sh shows before it changes anything](docs/plan.svg)
+
 The scripts are the same for everyone. Your own data lives in a **profile**, a folder inside `profiles/`.
 
 ## How to use it
