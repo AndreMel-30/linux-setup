@@ -1,0 +1,14 @@
+# Checks the scripts on every push and pull request.
+name: lint
+
+on: [push, pull_request]
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: bash -n install.sh backup.sh lib/common.sh
+      - name: ShellCheck
+        run: shellcheck -x -S warning install.sh backup.sh lib/common.sh

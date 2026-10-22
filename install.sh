@@ -23,7 +23,7 @@ FAILED=()
 # Ask for the sudo password once, then keep it alive in the background
 # so it does not expire during long installs.
 sudo -v
-while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done 2>/dev/null &
+while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done >/dev/null 2>&1 &
 SUDO_KEEPALIVE=$!
 trap 'kill "$SUDO_KEEPALIVE" 2>/dev/null || true' EXIT
 
@@ -60,20 +60,29 @@ if is_true "$DO_APT" && [[ -d $REPOS/sources ]]; then
     fi
     if [[ -d $REPOS/keys ]]; then
         while IFS= read -r -d '' key; do
-            sudo install -D -m 0644 "$key" "${key#"$REPOS/keys"}"
+            sudo install -D -m 0644 "$key" "${key#"$REPOS/keys"}" || FAILED+=("apt key: ${key#"$REPOS/keys"}")
         done < <(find "$REPOS/keys" -type f -print0)
     fi
     for src in "$REPOS"/sources/*; do
-        sudo install -m 0644 "$src" /etc/apt/sources.list.d/
-        info "$(basename "$src")"
+        if sudo install -m 0644 "$src" /etc/apt/sources.list.d/; then
+            info "$(basename "$src")"
+        else
+            FAILED+=("apt repository: $(basename "$src")")
+        fi
     done
 fi
 
-step "System update"
-# A repository with a bad or expired key makes "apt-get update" fail, but the
-# others are still updated, so this is reported instead of stopping here.
-apt_get update || FAILED+=("apt-get update: a repository failed, see the messages above")
-apt_get full-upgrade
+if is_true "$DO_APT" || is_true "$DO_UPGRADE"; then
+    step "System update"
+    # A repository with a bad or expired key makes "apt-get update" fail, but the
+    # others are still updated, so this is reported instead of stopping here.
+    apt_get update || FAILED+=("apt-get update: a repository failed, see the messages above")
+    if is_true "$DO_UPGRADE"; then
+        # If the upgrade fails, apt itself is in trouble: installing more
+        # packages on top would only make it worse, so this one stops the script.
+        apt_get full-upgrade || die "the system upgrade failed: fix apt (see the messages above) and run this script again"
+    fi
+fi
 
 if is_true "$DO_APT"; then
     step "apt packages"
@@ -128,9 +137,12 @@ fi
 if [[ -n $SWAPPINESS ]] || is_true "$ENABLE_TRIM"; then
     step "System tweaks"
     if [[ -n $SWAPPINESS ]]; then
-        echo "vm.swappiness=$SWAPPINESS" | sudo tee /etc/sysctl.d/99-swappiness.conf >/dev/null
-        sudo sysctl --system >/dev/null
-        info "swappiness = $SWAPPINESS"
+        if echo "vm.swappiness=$SWAPPINESS" | sudo tee /etc/sysctl.d/99-swappiness.conf >/dev/null \
+                && sudo sysctl --system >/dev/null; then
+            info "swappiness = $SWAPPINESS"
+        else
+            FAILED+=("swappiness")
+        fi
     fi
     if is_true "$ENABLE_TRIM"; then
         sudo systemctl enable --now fstrim.timer >/dev/null 2>&1 && info "weekly TRIM enabled" || FAILED+=("fstrim.timer")
@@ -168,6 +180,8 @@ run_hooks post
 step "Done"
 if ((${#FAILED[@]})); then
     printf '\033[1;33mCheck these by hand:\033[0m\n'; printf '  - %s\n' "${FAILED[@]}"
-else
-    echo "All good. Reboot (or log out and back in) to apply everything."
+    echo "The rest is done. Reboot (or log out and back in) to apply it."
+    # Exit with an error, so a script that runs this one can tell something failed.
+    exit 1
 fi
+echo "All good. Reboot (or log out and back in) to apply everything."

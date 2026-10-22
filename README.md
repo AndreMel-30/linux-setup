@@ -34,7 +34,7 @@ git clone https://github.com/AndreMel-30/linux-setup.git ~/linux-setup
 cd ~/linux-setup && ./install.sh myname
 ```
 
-Then reboot. At the end, `install.sh` lists anything it could not do. You can run it again as many times as you like.
+Then reboot. At the end, `install.sh` lists anything it could not do (and exits with an error code if there is something). You can run it again as many times as you like.
 
 If you leave out the name, the profile is called `default`. `example` is the template, so you can't back up into it.
 
@@ -56,10 +56,11 @@ profiles/myname/
 
 ### setup.conf
 
-This is where you decide what the scripts do. It is a normal bash file with a few variables:
+This is where you decide what the scripts do. It is a normal bash file with a few variables. Because it is bash, the scripts run it as code every time they load the profile, even `backup.sh`: only use profiles you trust.
 
 | Variable | What it does |
 |---|---|
+| `DO_UPGRADE` | Update the whole system (`apt full-upgrade`) before installing anything. Turn it off if you only want to restore, say, your dotfiles. |
 | `DO_APT`, `DO_FLATPAK`, `DO_SNAP` | Turn each package manager on or off. Set `DO_SNAP=false` on Mint, which has snap disabled. |
 | `DO_DCONF`, `DO_DOTFILES`, `DO_HOOKS` | Same idea for desktop settings, dotfiles and hooks. |
 | `SWAPPINESS` | How eagerly the kernel uses swap. Ubuntu and Mint use 60; lower values keep more in RAM. Leave empty to skip. |
@@ -75,7 +76,7 @@ It reads your system and writes the result into the profile. It does not change 
 
 - **apt**: lists the packages you installed by hand. It subtracts the list from the moment the system was installed, so you only get your own packages and not the hundreds that came with the distro. Old kernel versions are left out.
 - **third-party repositories**: copies the repository files from `/etc/apt/sources.list.d/` and the keys they are signed with into `apt-repos/`. The distro's own repositories are skipped.
-- **Flatpak and Snap**: lists the apps you have installed.
+- **Flatpak and Snap**: lists the apps you have installed. For Flatpak only the app IDs are saved, and `install.sh` installs them all from Flathub, system-wide. `backup.sh` warns you about apps that came from another source or are installed for your user only.
 - **dconf**: dumps the desktop settings to text files.
 - **dotfiles**: copies the files listed in `DOTFILES`, and warns you if one looks like it contains a token or password. If one is a symlink, the file it points to is copied. A file you delete from your home folder is not deleted from the profile; remove it there by hand.
 
@@ -85,7 +86,7 @@ It reads the profile and applies it to the new system. Run it as a normal user, 
 
 1. Runs `hooks/pre-*.sh`
 2. Puts back the third-party repositories and their keys from `apt-repos/`
-3. Updates the system
+3. Updates the system, unless `DO_UPGRADE=false`. If the upgrade fails the script stops, because installing more on top of a broken apt only makes things worse.
 4. Installs the apt, Flatpak and Snap packages. A package that can't be found is skipped and reported, it doesn't stop the rest. Packages that ask a question while installing (wireshark, for example) get their default answer, so the script never stops to wait for you.
 5. Sets swappiness and TRIM
 6. Loads the dconf settings
@@ -118,7 +119,7 @@ Nothing is searched for or downloaded: the new system trusts exactly the same so
 - Try it in a virtual machine first. `backup.sh` is safe to run any time, but `install.sh` changes the system.
 - Other desktops (KDE, XFCE...) are not recognised for dconf. You can still save their config folders by adding them to `DOTFILES`, for example `.config/xfce4`.
 - Distros that are not Ubuntu-based are refused. `FORCE=1 ./install.sh myname` lets you try anyway.
-- If you keep your profile in a public repo, read your dotfiles first. A private repo is safer. A profile can also live outside this folder: any argument with a `/` is used as a path, for example `./install.sh ~/my-profile`.
+- If you keep your profile in a public repo, read your dotfiles first. `backup.sh` warns about lines like `password = ...`, but that is only a hint: it can't recognise every secret. A private repo is safer. A profile can also live outside this folder: any argument with a `/` is used as a path, for example `./install.sh ~/my-profile`.
 
 ## License
 

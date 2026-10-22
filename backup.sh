@@ -86,8 +86,19 @@ fi
 
 if is_true "$DO_FLATPAK" && command -v flatpak >/dev/null; then
     step "Flatpak apps"
-    flatpak list --app --columns=application | sort -u > "$PROFILE_DIR/packages/flatpak.txt"
+    # Only the app IDs are saved: install.sh installs them all from Flathub,
+    # system-wide. Apps that came from somewhere else are pointed out here.
+    apps=$(flatpak list --app --columns=application,origin,installation)
+    awk 'NF {print $1}' <<< "$apps" | sort -u > "$PROFILE_DIR/packages/flatpak.txt"
     info "$(wc -l < "$PROFILE_DIR/packages/flatpak.txt") apps -> packages/flatpak.txt"
+    while read -r app origin scope; do
+        if [[ $origin != flathub ]]; then
+            warn "$app comes from '$origin', install.sh will look for it on Flathub"
+        fi
+        if [[ $scope == user ]]; then
+            warn "$app is installed for your user only, install.sh installs it system-wide"
+        fi
+    done < <(awk NF <<< "$apps")
 fi
 
 if is_true "$DO_SNAP" && command -v snap >/dev/null; then
@@ -131,6 +142,8 @@ if is_true "$DO_DOTFILES"; then
     if grep -rIlE '(token|secret|passw(or)?d|api[_-]?key)[[:space:]]*[=:]' "$PROFILE_DIR/dotfiles" 2>/dev/null; then
         warn "the files above look like they contain credentials: check them before you push"
     fi
+    # The check above is only a hint: it misses anything not written that way.
+    info "the credential check only spots lines like 'password = ...': read your dotfiles before making them public"
 fi
 
 echo

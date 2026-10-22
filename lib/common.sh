@@ -58,7 +58,7 @@ resolve_profile() {
 
 # Set the defaults, then source the profile's setup.conf on top of them.
 load_config() {
-    DO_APT=true DO_FLATPAK=true DO_SNAP=true DO_DCONF=true DO_DOTFILES=true DO_HOOKS=true
+    DO_UPGRADE=true DO_APT=true DO_FLATPAK=true DO_SNAP=true DO_DCONF=true DO_DOTFILES=true DO_HOOKS=true
     SWAPPINESS="" ENABLE_TRIM=true
     DOTFILES=() DCONF_PATHS=()
     local conf="$PROFILE_DIR/setup.conf"
