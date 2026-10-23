@@ -1,14 +1,18 @@
 # Checks the scripts on every push and pull request.
-name: lint
+name: tests
 
 on: [push, pull_request]
 
 jobs:
-  shellcheck:
+  check:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Syntax check
-        run: bash -n install.sh backup.sh lib/common.sh
+        run: bash -n install.sh backup.sh lib/common.sh tests/*.sh
       - name: ShellCheck
-        run: shellcheck -x -S warning install.sh backup.sh lib/common.sh
+        run: shellcheck -x -S warning install.sh backup.sh lib/common.sh tests/*.sh
+      - name: Tests
+        run: tests/run.sh
+      - name: Run install.sh on this throwaway machine
+        run: tests/install-smoke.sh

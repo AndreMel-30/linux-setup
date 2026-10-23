@@ -54,7 +54,7 @@ elif [[ -d $PROFILE_DIR/apt-repos/sources ]]; then
     saved=$(cat "$PROFILE_DIR/apt-repos/codename" 2>/dev/null || true)
     current=$(. /etc/os-release; echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")
     if [[ -n $saved && $saved != "$current" ]]; then
-        row "" "! saved for '$saved', this system is '$current': some may not work"
+        row "" "saved on '$saved', this system is '$current': they usually still work"
     fi
 else
     row "apt repositories" "none"
@@ -176,7 +176,7 @@ if is_true "$DO_APT" && [[ -d $REPOS/sources ]]; then
     saved=$(cat "$REPOS/codename" 2>/dev/null || true)
     current=$(. /etc/os-release; echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")
     if [[ -n $saved && $saved != "$current" ]]; then
-        warn "these repositories were set up for '$saved', this system is '$current': some may not work"
+        warn "these were saved on '$saved' and this system is '$current'. They usually still work; when you can, switch them to '$current' following each developer's instructions"
     fi
     if [[ -d $REPOS/keys ]]; then
         while IFS= read -r -d '' key; do

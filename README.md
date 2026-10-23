@@ -16,7 +16,12 @@ The scripts are the same for everyone. Your own data lives in a **profile**, a f
 
 ## How to use it
 
-First fork this repo on GitHub (or copy it into a private repo), so you have your own copy to push your profile to. In the commands below, replace `AndreMel-30` with your GitHub username.
+You need your own copy of this repo on GitHub, to push your profile to. There are two ways:
+
+- **Fork it.** Quick, but a fork of a public repo is always public, and so is everything you push to it, dotfiles included.
+- **Make a private copy.** Click **Use this template** at the top of this page and choose **Private**. Your profile stays visible only to you.
+
+In the commands below, replace `AndreMel-30` with your GitHub username and `linux-setup` with the name of your copy. If your copy is private, `git clone` on the new system needs you to log in to GitHub (with an SSH key or a token), so have that ready before you reinstall.
 
 On the system you have now, before reinstalling:
 
@@ -24,7 +29,7 @@ On the system you have now, before reinstalling:
 git clone https://github.com/AndreMel-30/linux-setup.git
 cd linux-setup
 ./backup.sh myname        # saves everything into profiles/myname
-git diff                  # check it, especially the dotfiles
+git status                # see what was saved, especially the dotfiles
 git add -A && git commit -m "backup" && git push
 ```
 
@@ -79,7 +84,7 @@ It reads your system and writes the result into the profile. It does not change 
 - **apt**: lists the packages you installed by hand. It subtracts the list from the moment the system was installed, so you only get your own packages and not the hundreds that came with the distro. Old kernel versions are left out.
 - **third-party repositories**: copies the repository files from `/etc/apt/sources.list.d/` and the keys they are signed with into `apt-repos/`. The distro's own repositories are skipped.
 - **Flatpak and Snap**: lists the apps you have installed. For Flatpak only the app IDs are saved, and `install.sh` installs them all from Flathub, system-wide. `backup.sh` warns you about apps that came from another source or are installed for your user only.
-- **dconf**: dumps the desktop settings to text files.
+- **dconf**: dumps the desktop settings to text files. Some settings only store the path of a file, like your wallpaper; if that file is in your home folder and not in `DOTFILES`, `backup.sh` tells you, so you can copy it over yourself.
 - **dotfiles**: copies the files listed in `DOTFILES`, and warns you if one looks like it contains a token or password. If one is a symlink, the file it points to is copied. A file you delete from your home folder is not deleted from the profile; remove it there by hand.
 
 ### install.sh
@@ -145,7 +150,7 @@ Nothing is searched for or downloaded: the new system trusts exactly the same so
 
 - If you don't want a repository anymore, remove it from your current system (or delete its files from `apt-repos/`) before you run `install.sh`.
 - Developers sometimes change their key. If a saved key is out of date, `apt-get update` complains about that repository; `install.sh` reports it at the end and goes on with the rest. Re-add the repository by following the developer's instructions.
-- The repositories are set up for one Ubuntu release (`apt-repos/codename`, for example `noble`). If the new system is based on a different release, `install.sh` warns you, because some of them may not work.
+- The repositories are saved for one Ubuntu release (`apt-repos/codename`, for example `noble`). If you install a newer release, `install.sh` tells you and puts them back as they are. That usually works: most developers keep publishing for the older release too. (I tried a profile saved on Mint 22.3 on Ubuntu 26.04: Brave, Docker, Tailscale, VSCodium and Claude Desktop all installed fine.) When you have time, switch them to the new release by following each developer's instructions.
 - Anyone who can change your profile can add a repository and a key, and so install software as root. The same is true for hooks. Keep your profile somewhere only you can write to.
 
 ## Good to know
@@ -154,6 +159,10 @@ Nothing is searched for or downloaded: the new system trusts exactly the same so
 - Other desktops (KDE, XFCE...) are not recognised for dconf. You can still save their config folders by adding them to `DOTFILES`, for example `.config/xfce4`.
 - Distros that are not Ubuntu-based are refused. `FORCE=1 ./install.sh myname` lets you try anyway.
 - If you keep your profile in a public repo, read your dotfiles first. `backup.sh` warns about lines like `password = ...`, but that is only a hint: it can't recognise every secret. A private repo is safer. A profile can also live outside this folder: any argument with a `/` is used as a path, for example `./install.sh ~/my-profile`.
+
+## Tests
+
+`tests/run.sh` checks the shared functions and runs `backup.sh` against a fake home folder. It changes nothing on your system, so you can run it any time. `tests/install-smoke.sh` runs `install.sh` for real, twice, so it only runs on GitHub's throwaway machines, together with ShellCheck, on every push.
 
 ## License
 

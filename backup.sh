@@ -118,6 +118,17 @@ if is_true "$DO_DCONF" && command -v dconf >/dev/null; then
             dconf dump "$p" > "$PROFILE_DIR/dconf/$f"
             info "$p -> dconf/$f"
         done
+        # Settings can point to files in your home folder, like the wallpaper.
+        # dconf only stores the path, so list the files that are not saved.
+        while IFS= read -r file; do
+            [[ -f $file ]] || continue                  # folders (bookmarks...) are fine
+            rel=${file#"$HOME"/} saved=false
+            for d in "${DOTFILES[@]}"; do
+                if [[ $rel == "$d" || $rel == "$d"/* ]]; then saved=true; fi
+            done
+            is_true "$saved" && continue
+            warn "the settings use ~/$rel, which is not saved: copy it to the new system yourself (or add it to DOTFILES)"
+        done < <(grep -rhoE "file://$HOME/[^'\"]+" "$PROFILE_DIR/dconf" 2>/dev/null | sed 's|^file://||; s|%20| |g' | sort -u)
     else
         warn "desktop '${XDG_CURRENT_DESKTOP:-?}' not recognised: set DCONF_PATHS in setup.conf"
     fi
@@ -147,5 +158,7 @@ if is_true "$DO_DOTFILES"; then
 fi
 
 echo
-echo "Done. Review the changes with 'git diff', then:"
+echo "Done. Look at what changed before you commit ('git status' lists new files,"
+echo "'git diff' shows changes to files that were already there). Then:"
 echo "  git add -A && git commit -m 'backup' && git push"
+echo "If the repo you push to is public, everything in the profile becomes public, dotfiles included."
