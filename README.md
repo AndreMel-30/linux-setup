@@ -55,6 +55,7 @@ profiles/myname/
 ├── packages/       apt.txt, flatpak.txt, snap.txt, one entry per line
 ├── apt-repos/      third-party apt repositories and their keys
 ├── dconf/          desktop settings, one .ini file per dconf branch
+│   └── laptop/     power settings, only applied on laptops
 ├── dotfiles/       copies of your config files
 └── hooks/          your own scripts
 ```
@@ -86,6 +87,8 @@ It reads your system and writes the result into the profile. It does not change 
 - **Flatpak and Snap**: lists the apps you have installed. For Flatpak only the app IDs are saved, and `install.sh` installs them all from Flathub, system-wide. `backup.sh` warns you about apps that came from another source or are installed for your user only.
 - **dconf**: dumps the desktop settings to text files. Some settings only store the path of a file, like your wallpaper; if that file is in your home folder and not in `DOTFILES`, `backup.sh` tells you, so you can copy it over yourself.
 - **dotfiles**: copies the files listed in `DOTFILES`, and warns you if one looks like it contains a token or password. If one is a symlink, the file it points to is copied. A file you delete from your home folder is not deleted from the profile; remove it there by hand.
+
+Power settings (sleep on battery, battery warnings, lid actions) are saved on their own in `dconf/laptop/`, not in the main branch file, so they don't get applied to every machine. A machine counts as a laptop when it has a battery of its own; Bluetooth devices don't count. `backup.sh` writes `dconf/laptop/` only on a laptop, and running it on a desktop keeps the existing laptop file as it is. `install.sh` loads those files only on a laptop and skips them on a desktop.
 
 ### install.sh
 
@@ -128,7 +131,7 @@ Then:
 3. Updates the system, unless `DO_UPGRADE=false`. If the upgrade fails the script stops, because installing more on top of a broken apt only makes things worse.
 4. Installs the apt, Flatpak and Snap packages. A package that can't be found is skipped and reported, it doesn't stop the rest. Packages that ask a question while installing (wireshark, for example) get their default answer, so the script never stops to wait for you.
 5. Sets swappiness and TRIM
-6. Loads the dconf settings
+6. Loads the dconf settings (the `dconf/laptop/` files only on a laptop)
 7. Links the dotfiles into your home folder. They are symlinks, so editing `~/.bashrc` edits the file in the repo. If a file is already there, it is renamed to `.bak.<date>`, never deleted. Because of the links, keep the repo in a fixed place (like `~/linux-setup`): if you move or delete it, those files stop working.
 8. Runs `hooks/post-*.sh`
 

@@ -112,12 +112,31 @@ fi
 if is_true "$DO_DCONF" && command -v dconf >/dev/null; then
     step "Desktop settings (dconf)"
     ((${#DCONF_PATHS[@]})) || read -ra DCONF_PATHS <<< "$(default_dconf_paths)"
+    power=$(power_dconf_path)
     if ((${#DCONF_PATHS[@]})); then
         for p in "${DCONF_PATHS[@]}"; do
             f=$(dconf_file_for "$p")
             dconf dump "$p" > "$PROFILE_DIR/dconf/$f"
+            # Power settings are saved apart, see below.
+            if [[ -n $power && $power == "$p"* ]]; then
+                section=${power#"$p"}
+                dconf_drop_section "$PROFILE_DIR/dconf/$f" "${section%/}"
+            fi
             info "$p -> dconf/$f"
         done
+        # Power settings (sleep on battery, low battery actions) only make sense on a
+        # laptop, so they go in dconf/laptop/ and install.sh applies them only where
+        # there is a battery. A backup from a desktop keeps the laptop ones already saved.
+        if [[ -n $power ]]; then
+            pf=$(dconf_file_for "$power")
+            if is_laptop; then
+                mkdir -p "$PROFILE_DIR/dconf/laptop"
+                dconf dump "$power" > "$PROFILE_DIR/dconf/laptop/$pf"
+                info "$power -> dconf/laptop/$pf (laptops only)"
+            else
+                info "no battery found: laptop power settings not saved (the ones already in the profile are kept)"
+            fi
+        fi
         # Settings can point to files in your home folder, like the wallpaper.
         # dconf only stores the path, so list the files that are not saved.
         while IFS= read -r file; do

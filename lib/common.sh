@@ -67,6 +67,22 @@ load_config() {
     . "$conf"
 }
 
+# --- Laptop -----------------------------------------------------------------
+
+# True if the machine has its own battery. A battery with scope=Device (a
+# Bluetooth mouse, headphones...) does not count. POWER_SUPPLY_DIR is only
+# there so the tests can point it at a fake folder.
+is_laptop() {
+    local dir=${POWER_SUPPLY_DIR:-/sys/class/power_supply} d
+    for d in "$dir"/*/; do
+        [[ -r $d/type ]] || continue
+        [[ $(< "$d/type") == Battery ]] || continue
+        if [[ -r $d/scope && $(< "$d/scope") == Device ]]; then continue; fi
+        return 0
+    done
+    return 1
+}
+
 # --- dconf ------------------------------------------------------------------
 
 # dconf branches to save, chosen from the desktop environment in use.
@@ -84,3 +100,30 @@ default_dconf_paths() {
 # A dconf path becomes a file name and back: /org/cinnamon/ <-> org.cinnamon.ini
 dconf_file_for() { local p=${1#/}; p=${p%/}; echo "${p//\//.}.ini"; }
 dconf_path_for() { local n; n=$(basename "$1" .ini); echo "/${n//.//}/"; }
+
+# The dconf path of the power settings (sleep, lid, battery...) for this desktop.
+# Prints nothing for a desktop we do not know.
+power_dconf_path() {
+    local de=${XDG_CURRENT_DESKTOP:-}
+    case ${de,,} in
+        *cinnamon*) echo /org/cinnamon/settings-daemon/plugins/power/ ;;
+        *mate*)     echo /org/mate/power-manager/ ;;
+        *budgie*|*pantheon*|*gnome*|*unity*) echo /org/gnome/settings-daemon/plugins/power/ ;;
+    esac
+}
+
+# Remove the section [SECTION] from a dconf dump file, in place. A section is
+# its header plus the lines after it, up to the next header. The empty line
+# before a section is kept, the one after a removed section goes with it.
+dconf_drop_section() {
+    local file=$1 section=$2 tmp
+    tmp=$(mktemp "$file.XXXXXX")
+    awk -v s="[$section]" '
+        /^\[/ { skip = ($0 == s) }
+        skip { next }
+        /^$/ { blank = blank "\n"; next }
+        { printf "%s%s\n", blank, $0; blank = "" }
+    ' "$file" > "$tmp"
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+}

@@ -44,6 +44,45 @@ check "a path is used as it is" "/tmp/my-profile" "$(profile /tmp/my-profile)"
 out=$(profile ..)
 check "'..' is refused" yes "$(grep -q 'not a valid profile name' <<< "$out" && echo yes || echo no)"
 
+echo "is_laptop"
+ps=$(mktemp -d)
+mkdir -p "$ps/a/BAT0" "$ps/a/AC" "$ps/b/AC" "$ps/c/hid" "$ps/d/BAT0"
+echo Battery > "$ps/a/BAT0/type"; echo Mains > "$ps/a/AC/type"
+echo Mains > "$ps/b/AC/type"
+echo Battery > "$ps/c/hid/type"; echo Device > "$ps/c/hid/scope"
+echo Battery > "$ps/d/BAT0/type"; echo System > "$ps/d/BAT0/scope"
+check "battery and mains adapter is a laptop" yes "$(POWER_SUPPLY_DIR=$ps/a lib is_laptop && echo yes || echo no)"
+check "only a mains adapter is not a laptop" no "$(POWER_SUPPLY_DIR=$ps/b lib is_laptop && echo yes || echo no)"
+check "a battery with scope=Device is not a laptop" no "$(POWER_SUPPLY_DIR=$ps/c lib is_laptop && echo yes || echo no)"
+check "a battery with scope=System is a laptop" yes "$(POWER_SUPPLY_DIR=$ps/d lib is_laptop && echo yes || echo no)"
+check "a missing folder is not a laptop" no "$(POWER_SUPPLY_DIR=$ps/nope lib is_laptop && echo yes || echo no)"
+rm -rf "$ps"
+
+echo "power_dconf_path"
+check "Cinnamon" /org/cinnamon/settings-daemon/plugins/power/ "$(XDG_CURRENT_DESKTOP=X-Cinnamon lib power_dconf_path)"
+check "GNOME" /org/gnome/settings-daemon/plugins/power/ "$(XDG_CURRENT_DESKTOP=GNOME lib power_dconf_path)"
+check "ubuntu:GNOME" /org/gnome/settings-daemon/plugins/power/ "$(XDG_CURRENT_DESKTOP=ubuntu:GNOME lib power_dconf_path)"
+check "MATE" /org/mate/power-manager/ "$(XDG_CURRENT_DESKTOP=MATE lib power_dconf_path)"
+check "Budgie:GNOME" /org/gnome/settings-daemon/plugins/power/ "$(XDG_CURRENT_DESKTOP=Budgie:GNOME lib power_dconf_path)"
+check "an unknown desktop gives nothing" "" "$(XDG_CURRENT_DESKTOP=KDE lib power_dconf_path)"
+
+echo "dconf_drop_section"
+f=$(mktemp)
+make_ini() {   # make_ini FILE: three sections, the power one in the middle
+    printf '%s\n' '[a]' 'x=1' '' '[settings-daemon/plugins/power]' 'sleep=0' 'low=10' '' '[theme]' "name='cinnamon'" > "$1"
+}
+make_ini "$f"
+lib dconf_drop_section "$f" settings-daemon/plugins/power
+check "the middle section is removed, the others are kept" $'[a]\nx=1\n\n[theme]\nname=\'cinnamon\'' "$(cat "$f")"
+make_ini "$f"
+lib dconf_drop_section "$f" theme
+check "the last section is removed" $'[a]\nx=1\n\n[settings-daemon/plugins/power]\nsleep=0\nlow=10' "$(cat "$f")"
+make_ini "$f"
+before=$(cat "$f")
+lib dconf_drop_section "$f" missing/section
+check "a missing section leaves the file unchanged" "$before" "$(cat "$f")"
+rm -f "$f"
+
 echo "backup.sh with a fake home"
 home=$(mktemp -d)
 mkdir -p "$home/.config/app"

@@ -103,6 +103,20 @@ else
     if ((${#list[@]})); then row "Desktop settings" "${#list[@]} dconf branches: $(join "${list[@]}")"; else row "Desktop settings" "none"; fi
 fi
 
+list=()
+for ini in "$PROFILE_DIR"/dconf/laptop/*.ini; do if [[ -s $ini ]]; then list+=("$(dconf_path_for "$ini")"); fi; done
+if ((${#list[@]})); then
+    if ! is_true "$DO_DCONF"; then
+        off "Laptop power" DO_DCONF
+    elif ! command -v dconf >/dev/null; then
+        row "Laptop power" "skipped (dconf is not installed)"
+    elif is_laptop; then
+        row "Laptop power" "${#list[@]} dconf branch(es): $(join "${list[@]}")"
+    else
+        row "Laptop power" "skipped (no battery found, this is not a laptop)"
+    fi
+fi
+
 if ! is_true "$DO_DOTFILES"; then
     off "Dotfiles" DO_DOTFILES
 else
@@ -276,6 +290,22 @@ if is_true "$DO_DCONF" && command -v dconf >/dev/null; then
         path=$(dconf_path_for "$ini")
         dconf load "$path" < "$ini" && info "$path" || FAILED+=("dconf: $path")
     done
+    # Power settings (sleep on battery, low battery actions) are saved apart by
+    # backup.sh and only applied on laptops.
+    laptop=()
+    for ini in "$PROFILE_DIR"/dconf/laptop/*.ini; do
+        if [[ -s $ini ]]; then laptop+=("$ini"); fi
+    done
+    if ((${#laptop[@]})); then
+        if is_laptop; then
+            for ini in "${laptop[@]}"; do
+                path=$(dconf_path_for "$ini")
+                dconf load "$path" < "$ini" && info "$path (laptop)" || FAILED+=("dconf: $path")
+            done
+        else
+            info "no battery found: laptop power settings skipped"
+        fi
+    fi
 fi
 
 if is_true "$DO_DOTFILES" && [[ -d $PROFILE_DIR/dotfiles ]]; then
